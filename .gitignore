@@ -1,0 +1,36 @@
+# --- CircuitPython / Feather System Files ---
+boot_out.txt
+.metadata_never_index
+.Trashes
+.fseventsd
+.Spotlight-V100
+System Volume Information/
+
+# --- Poetry & Python Environment ---
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+poetry.lock
+.python-version
+
+# --- Secrets (CRITICAL: Do not leak WiFi credentials) ---
+settings.toml
+secrets.py
+
+# --- IDE & Editor Junk ---
+.vscode/
+.history/
+.cursor/
+*.swp
+.DS_Store
+
+# --- Test & Coverage Reports ---
+reports/
+
+# --- Local Logs & Buffers ---
+*.log
+
+# bin files for firmware flashing
+*.bin
+device_files/
