@@ -40,6 +40,8 @@ def test_terminal_js_serializes_poll_and_input() -> None:
     assert "postInput" in js
     assert "inputPending" in js
     assert "pollInFlight" in js
+    assert "logout-btn" in (STATIC_DIR / "terminal.html").read_text(encoding="utf-8")
+    assert "doLogout" in js
     assert "scheduleBacklogPoll" in js
     assert "since = st.rx_total" in js
     assert "json.pending" in js

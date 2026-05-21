@@ -1,5 +1,6 @@
 (function () {
   const statusEl = document.getElementById("status");
+  const logoutBtn = document.getElementById("logout-btn");
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -23,7 +24,9 @@
   let inputPending = "";
   let inputCoalesceTimer = null;
   let backlogTimer = null;
+  let pollTimer = null;
   let wokeSerial = false;
+  let loggingOut = false;
 
   function setStatus(text, ok) {
     statusEl.textContent = text;
@@ -113,8 +116,35 @@
     }
   }
 
+  async function doLogout() {
+    if (loggingOut) {
+      return;
+    }
+    loggingOut = true;
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    setStatus("logging out…", false);
+    try {
+      await fetch("/api/input", {
+        method: "POST",
+        credentials: "same-origin",
+        body: "\r\nexit\r\n",
+      });
+      await fetch("/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+    } catch (err) {
+      /* still leave the app */
+    }
+    window.location.href = "/login.html";
+  }
+
   async function pollOutput() {
-    if (pollInFlight) {
+    if (loggingOut || pollInFlight) {
       return;
     }
     pollInFlight = true;
@@ -161,8 +191,17 @@
   }
 
   term.onData(function (data) {
+    if (loggingOut) {
+      return;
+    }
     queueInput(data);
   });
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", function () {
+      void doLogout();
+    });
+  }
 
   async function start() {
     const st = await fetchStatus();
@@ -170,7 +209,7 @@
       since = st.rx_total;
     }
     void pollOutput();
-    setInterval(function () {
+    pollTimer = setInterval(function () {
       void pollOutput();
     }, POLL_MS);
     setTimeout(function () {

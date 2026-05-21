@@ -6,6 +6,8 @@ CIRCUITPY_WIFI_PASSWORD = ""
 
 # Web terminal password (browser login at http://<esp32-ip>/)
 WEB_PASSWORD = "change-me"
+# Idle session timeout in seconds (0 = no ESP32 timeout; browser session cookie only)
+WEB_SESSION_TTL_S = 1800
 
 # CircuitPython Web Workflow (poetry run deploy over WiFi) — always port 80
 CIRCUITPY_WEB_API_PASSWORD = ""

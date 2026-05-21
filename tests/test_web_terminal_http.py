@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from adafruit_httpserver.response import JSONResponse, Redirect
 
+from esp_remote.firmware.session import AUTH_COOKIE
 from esp_remote.firmware.uart_buffer import UartBuffer
 from esp_remote.firmware.uart_stats import UartStats
 from esp_remote.firmware.web_terminal import (
-    _AUTH_COOKIE,
     _password,
     create_server,
     login_password_from_body,
@@ -82,7 +82,7 @@ class TestLoginHandler:
         assert response_status(response) == 302
         assert response_header(response, "Location") == "/terminal.html"
         cookie = response_header(response, "Set-Cookie") or ""
-        assert _AUTH_COOKIE in cookie
+        assert AUTH_COOKIE in cookie
         assert "HttpOnly" in cookie
 
     def test_plus_in_password_is_decoded(
@@ -113,7 +113,7 @@ class TestIndexHandler:
                 server,
                 "GET",
                 "/",
-                extra_headers={"Cookie": _AUTH_COOKIE},
+                extra_headers={"Cookie": AUTH_COOKIE},
             )
         )
         assert response_header(response, "Location") == "/terminal.html"
@@ -138,7 +138,7 @@ class TestApiHandlers:
             server,
             "GET",
             "/api/output?since=0",
-            extra_headers={"Cookie": _AUTH_COOKIE},
+            extra_headers={"Cookie": AUTH_COOKIE},
         )
         response = web.api_output(request)
         assert isinstance(response, JSONResponse)
@@ -158,7 +158,7 @@ class TestApiHandlers:
             "/api/input",
             body=body,
             extra_headers={
-                "Cookie": _AUTH_COOKIE,
+                "Cookie": AUTH_COOKIE,
                 "Content-Type": "text/plain",
             },
         )
@@ -182,7 +182,7 @@ class TestApiHandlers:
             server,
             "GET",
             "/api/status",
-            extra_headers={"Cookie": _AUTH_COOKIE},
+            extra_headers={"Cookie": AUTH_COOKIE},
         )
         response = web.api_status(request)
         payload = json_payload(response)
@@ -226,7 +226,7 @@ class TestAuthAndUartEdgeCases:
                 "POST",
                 "/api/input",
                 body=b"hi",
-                extra_headers={"Cookie": _AUTH_COOKIE},
+                extra_headers={"Cookie": AUTH_COOKIE},
             )
         )
         stats.record_read_error()
@@ -235,7 +235,7 @@ class TestAuthAndUartEdgeCases:
                 server,
                 "GET",
                 "/api/status",
-                extra_headers={"Cookie": _AUTH_COOKIE},
+                extra_headers={"Cookie": AUTH_COOKIE},
             )
         )
         payload = json_payload(response)
@@ -259,6 +259,47 @@ class TestCreateServer:
         mock_instance.start.assert_called_once_with(host="0.0.0.0", port=9090)
 
 
+class TestLogoutHandler:
+    def test_logout_clears_session_and_writes_exit(
+        self, terminal: tuple, web_password: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from esp_remote.firmware import session as sess
+
+        monkeypatch.setenv("WEB_SESSION_TTL_S", "60")
+        server, web, uart, _ = terminal
+        sess.start_session()
+        request = build_request(
+            server,
+            "POST",
+            "/logout",
+            extra_headers={
+                "Cookie": AUTH_COOKIE,
+                "Accept": "application/json",
+            },
+        )
+        response = web.logout(request)
+        assert json_payload(response) == {"ok": True}
+        assert "Max-Age=0" in (response_header(response, "Set-Cookie") or "")
+        assert uart.written == [b"\r\nexit\r\n"]
+        assert sess.session_expired() is True
+
+    def test_logout_without_cookie_skips_uart_still_clears_cookie(
+        self, terminal: tuple, web_password: None
+    ) -> None:
+        server, web, uart, _ = terminal
+        response = web.logout(
+            build_request(
+                server,
+                "POST",
+                "/logout",
+                extra_headers={"Accept": "application/json"},
+            )
+        )
+        assert json_payload(response) == {"ok": True}
+        assert "Max-Age=0" in (response_header(response, "Set-Cookie") or "")
+        assert uart.written == []
+
+
 class TestLiveHttp:
     def test_post_login_over_tcp(self, web_password: None) -> None:
         server, _, _, _ = make_terminal_server()
@@ -273,7 +314,7 @@ class TestLiveHttp:
             )
             assert status == 302
             assert headers.get("location") == "/terminal.html"
-            assert _AUTH_COOKIE in (headers.get("set-cookie") or "")
+            assert AUTH_COOKIE in (headers.get("set-cookie") or "")
             assert body == b""
         finally:
             live.stop()
@@ -290,7 +331,7 @@ class TestLiveHttp:
             status, headers, body = live.request(
                 "GET",
                 "/api/output?since=0",
-                headers={"Cookie": _AUTH_COOKIE},
+                headers={"Cookie": AUTH_COOKIE},
             )
             assert status == 200
             payload = json.loads(body.decode())

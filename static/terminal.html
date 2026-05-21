@@ -11,7 +11,10 @@
     <body class="terminal-page">
         <header>
             <span class="title">Pi serial console</span>
-            <span id="status" class="status">connecting…</span>
+            <div class="header-actions">
+                <span id="status" class="status">connecting…</span>
+                <button type="button" id="logout-btn" class="btn-logout">Log out</button>
+            </div>
         </header>
         <div id="terminal"></div>
         <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>

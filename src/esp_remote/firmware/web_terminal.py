@@ -3,12 +3,22 @@
 import os
 
 from esp_remote.firmware.form_parse import bytes_to_text, parse_form_urlencoded
+from esp_remote.firmware.session import (
+    authorized,
+    cookie_present,
+    end_session,
+    login_set_cookie_header,
+    logout_clear_cookie_header,
+    start_session,
+)
 from esp_remote.firmware.uart_buffer import GAP_NOTICE
 from esp_remote.firmware.uart_pi import int_setting
 
+# Sent to Pi serial on logout (shell exit; harmless at login prompt).
+_LOGOUT_UART = b"\r\nexit\r\n"
+
 _UART_CHUNK = 256
 _UART_TX_CHUNK = 64
-_AUTH_COOKIE = "esp_auth=1"
 _HTTP_UNAUTHORIZED = (401, "Unauthorized")
 
 
@@ -35,12 +45,6 @@ class WebTerminal:
         self._uart = uart
         self._rx_buffer = rx_buffer
         self._stats = stats
-
-    def _authorized(self, request) -> bool:
-        if not _password():
-            return True
-        cookie = request.headers.get("cookie", "")
-        return _AUTH_COOKIE in cookie
 
     def _poll_uart(self) -> None:
         try:
@@ -75,16 +79,17 @@ class WebTerminal:
                 status=_HTTP_UNAUTHORIZED,
                 content_type="text/html",
             )
+        start_session()
         return Redirect(
             request,
             "/terminal.html",
-            headers={"Set-Cookie": _AUTH_COOKIE + "; Path=/; HttpOnly"},
+            headers=login_set_cookie_header(),
         )
 
     def api_output(self, request):
         from adafruit_httpserver import JSONResponse, Response  # noqa: PLC0415
 
-        if not self._authorized(request):
+        if not authorized(request):
             return Response(request, body="Unauthorized", status=_HTTP_UNAUTHORIZED)
         self._poll_uart()
         since = int(request.query_params.get("since", "0") or "0")
@@ -101,7 +106,7 @@ class WebTerminal:
     def api_input(self, request):
         from adafruit_httpserver import JSONResponse, Response  # noqa: PLC0415
 
-        if not self._authorized(request):
+        if not authorized(request):
             return Response(request, body="Unauthorized", status=_HTTP_UNAUTHORIZED)
         data = request.body
         if data:
@@ -127,7 +132,7 @@ class WebTerminal:
     def api_status(self, request):
         from adafruit_httpserver import JSONResponse, Response  # noqa: PLC0415
 
-        if not self._authorized(request):
+        if not authorized(request):
             return Response(request, body="Unauthorized", status=_HTTP_UNAUTHORIZED)
         self._poll_uart()
         payload = {
@@ -140,16 +145,30 @@ class WebTerminal:
         }
         return JSONResponse(request, payload)
 
+    def logout(self, request):
+        from adafruit_httpserver import JSONResponse, Redirect  # noqa: PLC0415
+
+        if cookie_present(request):
+            self._write_uart(_LOGOUT_UART)
+        end_session()
+        headers = logout_clear_cookie_header()
+        # Prefer JSON for fetch from terminal.js; redirect works for direct navigation.
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse(request, {"ok": True}, headers=headers)
+        return Redirect(request, "/login.html", headers=headers)
+
     def index(self, request):
         from adafruit_httpserver import Redirect  # noqa: PLC0415
 
-        if self._authorized(request):
+        if authorized(request):
             return Redirect(request, "/terminal.html")
         return Redirect(request, "/login.html")
 
     def register(self, server) -> None:
         """Attach routes to an adafruit_httpserver ``Server``."""
         server.route("/login", "POST")(self.login)
+        server.route("/logout", "POST")(self.logout)
         server.route("/api/output", "GET")(self.api_output)
         server.route("/api/input", "POST")(self.api_input)
         server.route("/api/status", "GET")(self.api_status)
