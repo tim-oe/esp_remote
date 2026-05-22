@@ -45,4 +45,8 @@ def test_terminal_js_serializes_poll_and_input() -> None:
     assert "scheduleBacklogPoll" in js
     assert "since = st.rx_total" in js
     assert "json.pending" in js
+    assert "json.gap" in js
+    assert "BACKLOG_URGENT" in js
     assert "res.status === 401" in js
+    assert "PUTTY_THEME" in js
+    assert "drawBoldTextInBrightColors" in js

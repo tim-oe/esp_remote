@@ -67,6 +67,10 @@ button:hover {
   background: #2ea043;
 }
 
+.terminal-page {
+  background: #000;
+}
+
 .terminal-page header {
   display: flex;
   justify-content: space-between;

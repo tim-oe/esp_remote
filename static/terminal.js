@@ -1,11 +1,39 @@
 (function () {
+  /* PuTTY-style 16-color palette; xterm.js renders ANSI SGR from the Pi shell. */
+  const PUTTY_THEME = {
+    background: "#000000",
+    foreground: "#c0c0c0",
+    cursor: "#00ff00",
+    cursorAccent: "#000000",
+    selectionBackground: "#0070c1",
+    selectionForeground: "#ffffff",
+    black: "#000000",
+    red: "#bb0000",
+    green: "#00bb00",
+    yellow: "#bbbb00",
+    blue: "#0000bb",
+    magenta: "#bb00bb",
+    cyan: "#00bbbb",
+    white: "#bbbbbb",
+    brightBlack: "#555555",
+    brightRed: "#ff5555",
+    brightGreen: "#55ff55",
+    brightYellow: "#ffff55",
+    brightBlue: "#5555ff",
+    brightMagenta: "#ff55ff",
+    brightCyan: "#55ffff",
+    brightWhite: "#ffffff",
+  };
+
   const statusEl = document.getElementById("status");
   const logoutBtn = document.getElementById("logout-btn");
   const term = new Terminal({
     cursorBlink: true,
+    drawBoldTextInBrightColors: true,
+    minimumContrastRatio: 1,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: 14,
-    theme: { background: "#0d1117", foreground: "#e6edf3", cursor: "#58a6ff" },
+    theme: PUTTY_THEME,
   });
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
@@ -16,6 +44,8 @@
   const POLL_MS = 40;
   const STATUS_EVERY = 50;
   const BACKLOG_MS = 15;
+  const BACKLOG_URGENT_MS = 0;
+  const BACKLOG_URGENT_PENDING = 512;
   const INPUT_COALESCE_MS = 6;
   let since = 0;
   let pollCount = 0;
@@ -33,14 +63,20 @@
     statusEl.classList.toggle("ok", !!ok);
   }
 
-  function scheduleBacklogPoll() {
+  function scheduleBacklogPoll(urgent) {
+    const delay =
+      urgent ? BACKLOG_URGENT_MS : BACKLOG_MS;
     if (backlogTimer !== null) {
-      return;
+      if (!urgent) {
+        return;
+      }
+      clearTimeout(backlogTimer);
+      backlogTimer = null;
     }
     backlogTimer = setTimeout(function () {
       backlogTimer = null;
       void pollOutput();
-    }, BACKLOG_MS);
+    }, delay);
   }
 
   async function fetchStatus() {
@@ -166,14 +202,17 @@
         term.write(json.data);
       }
       since = json.since;
-      morePending = (json.pending || 0) > 0;
+      const pendingBytes = json.pending || 0;
+      morePending = pendingBytes > 0 || !!json.gap;
 
       pollCount += 1;
-      if (pollCount % STATUS_EVERY === 0) {
+      const statusEvery =
+        pendingBytes > BACKLOG_URGENT_PENDING ? 5 : STATUS_EVERY;
+      if (pollCount % statusEvery === 0) {
         const st = await fetchStatus();
         if (st) {
           setStatus("rx " + st.rx_total + " B, tx " + st.tx_total + " B", true);
-          if (st.rx_total > since) {
+          if (st.rx_total > since || (st.uart_pending || 0) > 0) {
             morePending = true;
           }
         } else {
@@ -185,7 +224,7 @@
     } finally {
       pollInFlight = false;
       if (morePending) {
-        scheduleBacklogPoll();
+        scheduleBacklogPoll(pendingBytes > BACKLOG_URGENT_PENDING);
       }
     }
   }

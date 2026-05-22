@@ -146,6 +146,22 @@ class TestApiHandlers:
         assert payload["data"] == "cachedpi login:"
         assert payload["since"] == buf.total_rx
         assert payload["pending"] == 0
+        assert payload["gap"] is False
+
+    def test_api_output_reports_gap_after_buffer_trim(self, web_password: None) -> None:
+        buf = UartBuffer(max_bytes=10, poll_chunk=100)
+        server, web, _, buf = make_terminal_server(rx_buffer=buf)
+        buf.append(b"0123456789")
+        buf.append(b"abcdefghij")
+        request = build_request(
+            server,
+            "GET",
+            "/api/output?since=2",
+            extra_headers={"Cookie": AUTH_COOKIE},
+        )
+        payload = json_payload(web.api_output(request))
+        assert payload["gap"] is True
+        assert "dropped from buffer" in payload["data"]
 
     def test_api_input_writes_uart_and_returns_ok(
         self, terminal: tuple, web_password: None

@@ -9,7 +9,7 @@ from esp_remote.firmware.uart_stats import UartStats
 
 def test_drain_uart_appends_and_records_stats() -> None:
     uart = MagicMock()
-    uart.in_waiting = 4
+    type(uart).in_waiting = PropertyMock(side_effect=[4, 0])
     uart.read.return_value = b"abcd"
     buf = UartBuffer()
     stats = UartStats()

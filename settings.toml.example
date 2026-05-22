@@ -21,5 +21,9 @@ WEB_PORT = 8080
 
 # UART to Raspberry Pi console (GPIO14/15 on the Pi header)
 PI_UART_BAUD = 115200
+# Hardware RX buffer on the ESP32 UART (helps during reboot spew)
+PI_UART_RX_BUFFER = 8192
+# Ring buffer for captured serial shown in the browser (bytes)
+UART_RX_MAX_BYTES = 16384
 # Show a startup line in the web terminal (proves HTTP path; set 0 to disable)
 # UART_BANNER = 1

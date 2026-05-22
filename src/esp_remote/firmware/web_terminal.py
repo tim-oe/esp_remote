@@ -12,12 +12,12 @@ from esp_remote.firmware.session import (
     start_session,
 )
 from esp_remote.firmware.uart_buffer import GAP_NOTICE
+from esp_remote.firmware.uart_drain import DEFAULT_DRAIN_MAX_BYTES, drain_uart
 from esp_remote.firmware.uart_pi import int_setting
 
 # Sent to Pi serial on logout (shell exit; harmless at login prompt).
 _LOGOUT_UART = b"\r\nexit\r\n"
 
-_UART_CHUNK = 256
 _UART_TX_CHUNK = 64
 _HTTP_UNAUTHORIZED = (401, "Unauthorized")
 
@@ -47,18 +47,12 @@ class WebTerminal:
         self._stats = stats
 
     def _poll_uart(self) -> None:
-        try:
-            waiting = self._uart.in_waiting
-            if waiting:
-                chunk = self._uart.read(min(waiting, _UART_CHUNK))
-                if chunk:
-                    self._rx_buffer.append(chunk)
-                    if self._stats is not None:
-                        self._stats.record_rx(len(chunk))
-        except OSError as exc:
-            print(f"uart read: {exc}")
-            if self._stats is not None:
-                self._stats.record_read_error()
+        drain_uart(
+            self._uart,
+            self._rx_buffer,
+            self._stats,
+            max_bytes=DEFAULT_DRAIN_MAX_BYTES,
+        )
 
     def _uart_pending(self) -> int:
         try:
@@ -94,13 +88,16 @@ class WebTerminal:
         self._poll_uart()
         since = int(request.query_params.get("since", "0") or "0")
         chunk, cursor, gap = self._rx_buffer.read_since(since)
-        if gap and chunk:
+        if gap:
             chunk = GAP_NOTICE + chunk
         text = bytes_to_text(chunk)
         pending = self._rx_buffer.total_rx - cursor
+        uart_pending = self._uart_pending()
+        if uart_pending > pending:
+            pending = uart_pending
         return JSONResponse(
             request,
-            {"data": text, "since": cursor, "pending": pending},
+            {"data": text, "since": cursor, "pending": pending, "gap": gap},
         )
 
     def api_input(self, request):

@@ -6,15 +6,12 @@ _POLL_S = 0.01
 
 
 def _drain_uart(uart, rx_buffer, stats) -> None:
-    try:
-        waiting = uart.in_waiting
-        if waiting:
-            chunk = uart.read(min(waiting, 256))
-            if chunk:
-                rx_buffer.append(chunk)
-                stats.record_rx(len(chunk))
-    except OSError:
-        stats.record_read_error()
+    from esp_remote.firmware.uart_drain import (  # noqa: PLC0415
+        DEFAULT_DRAIN_MAX_BYTES,
+        drain_uart,
+    )
+
+    drain_uart(uart, rx_buffer, stats, max_bytes=DEFAULT_DRAIN_MAX_BYTES)
 
 
 def main() -> None:
@@ -24,7 +21,11 @@ def main() -> None:
     import wifi  # noqa: PLC0415
 
     from esp_remote.firmware.uart_buffer import UartBuffer  # noqa: PLC0415
-    from esp_remote.firmware.uart_pi import boot_banner, open_pi_uart  # noqa: PLC0415
+    from esp_remote.firmware.uart_pi import (  # noqa: PLC0415
+        boot_banner,
+        int_setting,
+        open_pi_uart,
+    )
     from esp_remote.firmware.uart_stats import UartStats  # noqa: PLC0415
     from esp_remote.firmware.web_terminal import create_server  # noqa: PLC0415
     from esp_remote.firmware.wifi_setup import connect  # noqa: PLC0415
@@ -35,7 +36,8 @@ def main() -> None:
 
     pool = socketpool.SocketPool(wifi.radio)
     uart = open_pi_uart()
-    rx_buffer = UartBuffer()
+    rx_max = int_setting("UART_RX_MAX_BYTES", 16384)
+    rx_buffer = UartBuffer(max_bytes=rx_max)
     stats = UartStats()
     banner = boot_banner(ip, port)
     if banner:

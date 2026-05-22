@@ -24,12 +24,14 @@ def open_pi_uart():
 
     baud = int_setting("PI_UART_BAUD", 115200)
     # Larger RX buffer helps capture boot spew from the Pi.
+    # Large hardware RX buffer helps survive reboot/kernel spew between poll ticks.
+    rx_hw = int_setting("PI_UART_RX_BUFFER", 8192)
     uart = busio.UART(
         board.TX,
         board.RX,
         baudrate=baud,
         timeout=0,
-        receiver_buffer_size=2048,
+        receiver_buffer_size=rx_hw,
     )
     print(f"uart: {baud} baud TX={board.TX} RX={board.RX}")
     return uart

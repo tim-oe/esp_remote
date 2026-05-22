@@ -15,7 +15,7 @@ flowchart LR
 ```
 
 1. **ESP32** connects to WiFi and serves a login page + terminal at `http://<esp32-ip>:8080/` (port `WEB_PORT`, default 8080 — port 80 is reserved for Web Workflow).
-2. **Browser** polls `/api/output` and posts keystrokes to `/api/input`; the ESP32 forwards bytes to/from the Pi on `TX`/`RX`. Use **Log out** in the terminal header to end the web session and send `exit` to the Pi shell.
+2. **Browser** polls `/api/output` and posts keystrokes to `/api/input`; the ESP32 forwards bytes to/from the Pi on `TX`/`RX`. Use **Log out** in the terminal header to end the web session and send `exit` to the Pi shell. The terminal uses **xterm.js** with a PuTTY-like 16-color palette for ANSI output (`ls --color`, `apt`, `nano`, etc.). After you log in on the Pi, add `export TERM=xterm-256color` to `~/.bashrc` (or `/etc/profile`) so programs emit color; the web UI does not inject shell commands on connect. During `reboot`/`shutdown` the Pi may go quiet for a minute; the terminal keeps polling and should show boot text when serial resumes. If output freezes mid-burst, you may see `[esp_remote: earlier output dropped from buffer]` — increase `UART_RX_MAX_BYTES` / `PI_UART_RX_BUFFER` in `settings.toml` (see `settings.toml.example`).
 3. **Raspberry Pi** stays offline-friendly — no agent, no `poetry run serve`, no TCP bridge to the Pi.
 
 Security: set `WEB_PASSWORD` in `settings.toml`. Optional `WEB_SESSION_TTL_S` (default in example: 1800) logs you out after that many seconds **without** terminal activity (idle timeout); the browser is sent to login on HTTP 401. Set `WEB_SESSION_TTL_S = 0` for no ESP32-side expiry (previous behavior). Traffic is HTTP on your LAN (TLS on ESP32 is not practical in CircuitPython); use a trusted network.

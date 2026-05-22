@@ -102,8 +102,10 @@ def make_terminal_server(
     rx_buffer: UartBuffer | None = None,
     stats=None,
 ) -> tuple[Server, WebTerminal, MockUart, UartBuffer]:
-    uart = uart or MockUart()
-    rx_buffer = rx_buffer or UartBuffer()
+    if uart is None:
+        uart = MockUart()
+    if rx_buffer is None:
+        rx_buffer = UartBuffer()
     server = Server(socket, str(static_dir), debug=False)
     terminal = WebTerminal(uart, rx_buffer, stats=stats)
     terminal.register(server)
